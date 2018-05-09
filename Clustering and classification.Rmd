@@ -1,0 +1,166 @@
+---
+title: "Classification and Clustering"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Analysis on Iris Dataset
+
+```{r lib, echo=FALSE, include=FALSE}
+library(ggplot2)
+library(caTools)
+library(rpart)
+library(rpart.plot)
+library(party)
+library(randomForest)
+library(cluster)
+library(fpc)
+library(e1071)
+library(neuralnet)
+library(nnet)
+library(dplyr)
+library(reshape2)
+```
+
+**Visualizing**
+
+```{r vi}
+ggplot(iris, aes(Petal.Length, Petal.Width, color = Species)) + geom_point()
+ggplot(iris, aes(Sepal.Length, Sepal.Width, color = Species)) + geom_point()
+```
+
+Splitting Data into training and test sets <br>
+We split the data into 70 percent for training data and 30 percent for testing.
+
+```{r spli }
+set.seed(101)
+
+sample <- sample.split(iris, SplitRatio = 0.7)
+
+iris.train <- subset(iris, sample == T)
+iris.test <- subset(iris, sample == F)
+
+```
+
+#Classification
+
+ 
+##Using c-tree
+Conditional inference trees are used in classification. We can see that the model has predicted setosa correctly. There is one misclassification in versicolor and 4 in virginica.
+```{r c-tree}
+iris.ctree <- ctree(Species~., data = iris.train)
+#plotting
+
+plot(iris.ctree)
+
+#prediction
+
+p.ctree <- predict(iris.ctree, iris.test) 
+table(p.ctree,iris.test$Species)
+
+
+```
+
+
+##Using random Forest
+We can see that random forest gave a better performance than c tree. It predicted setosa and versicolor correctly but gave an error of 3 in virginica. 
+```{r raf}
+iris.random <- randomForest(Species ~ ., data = iris.train)
+iris.random$importance
+
+plot(iris.random)
+
+p <- predict(iris.random, iris.test)
+table(p, iris.test$Species)
+
+##Using Support vector machine
+
+model <- svm(Species~. , data = iris)
+summary(model)
+
+predicted.values <- predict(model, iris[,1:4])
+
+table(predicted.values, iris$Species)
+```
+##Using neural network
+Such systems "learn" (i.e. progressively improve performance on) tasks by considering examples, generally without task-specific programming.<br>
+I have normalized the data first then applied neuralnet function which can be plotted to give weights to the values of the variables.
+```{r neural net}
+labels <- class.ind(as.factor(iris$Species))
+
+standardiser <- function(x){
+  (x-min(x))/(max(x)-min(x))
+}
+
+iris[, 1:4] <- lapply(iris[, 1:4], standardiser)
+
+pre_process_iris <- cbind(iris[,1:4], labels)
+
+f <- as.formula("setosa + versicolor + virginica ~ Sepal.Length + Sepal.Width + Petal.Length + Petal.Width")
+
+iris_net <- neuralnet(f, data = pre_process_iris, hidden = c(16, 12), act.fct = "tanh", linear.output = FALSE)
+
+plot(iris_net)
+
+```
+
+##Decision tree using r part
+We can also use rpart to perform classification.
+```{r dec tree}
+iris.tree <- rpart(Species~. , method = 'class',data = iris.train)
+
+printcp(iris.tree)
+
+#plotting
+
+plot(iris.tree, uniform = T, main = 'Iris classification')
+text(iris.tree, use.n = T, all = T)
+
+prp(iris.tree)
+
+#prediction
+p.rpart <- predict(iris.tree, newdata = iris.test[,1:4])
+
+
+```
+#Clustering
+
+##Using K means
+Cluster analysis or clustering is the task of grouping a set of objects in such a way that objects in the same group (called a cluster) are more similar (in some sense) to each other than to those in other groups (clusters). <br>
+
+As we know in advance that there are 3 species we have kept the value of clusters as 3.<br>
+We can see it has predicted setosa correctly but has few misclassifications in versicolor and virginica.<br>
+But still it is a good prediction as it is an unsupervised learning algorithm.
+```{r kmeans}
+
+irisCluster <- kmeans(iris[,1:4], 3, nstart = 20)
+irisCluster
+
+table(irisCluster$cluster, iris$Species)
+
+#Plot
+
+plot(iris[c("Sepal.Length", "Sepal.Width")], col = irisCluster$cluster)
+points(irisCluster$centers[, c("Sepal.Length", "Sepal.Width")], col = 1:3, pch = "*", cex = 5)
+
+
+#Using clusplot
+clusplot(iris, irisCluster$cluster, color = T, shade = T, labels = 0, lines = 0)
+table(irisCluster$cluster,iris$Species)
+```
+
+
+##Density based clustering 
+Unlike K-Means, DBSCAN does not require the number of clusters as a parameter. Rather it infers the number of clusters based on the data, and it can discover clusters of arbitrary shape (for comparison, K-Means usually discovers spherical clusters). <br>
+It has discovered two clusters on its own and mixes versicolor and virginica as a single cluster. 
+
+```{r density based}
+ds <- dbscan(iris[,1:4], eps = 0.42, MinPts = 5)
+
+table(ds$cluster,iris$Species)
+
+plotcluster(iris[,1:4], ds$cluster)
+```
